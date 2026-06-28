@@ -118,10 +118,11 @@ function RulesPage() {
         source_chat: d.source_chat,
         target_chat: d.target_chat,
         is_enabled: d.is_enabled,
-        options: d.options as unknown as Record<string, unknown>,
+        options: d.options as unknown as import("@/integrations/supabase/types").Json,
         status: d.is_enabled ? "active" : "paused",
         user_id: u.user.id,
       };
+
       if (d.id) {
         const { error } = await supabase.from("rules").update(payload).eq("id", d.id);
         if (error) throw error;
