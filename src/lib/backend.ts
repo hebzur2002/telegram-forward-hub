@@ -66,7 +66,7 @@ export const backend = {
       method: "POST",
       body: JSON.stringify({ phone }),
     }),
-  verifyOtp: (payload: { phone: string; code: string; phone_code_hash?: string }) =>
+  verifyOtp: (payload: { phone: string; code: string; password?: string }) =>
     jsonRequest<VerifyOtpResponse>("/auth/verify-otp", {
       method: "POST",
       body: JSON.stringify(payload),
