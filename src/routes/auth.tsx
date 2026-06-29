@@ -136,7 +136,7 @@ function AuthPage() {
                   <Button type="button" variant="ghost" onClick={() => setStep("phone")} disabled={loading}>
                     Change number
                   </Button>
-                  <Button type="submit" disabled={loading || code.length < 4} className="flex-1">
+                  <Button type="submit" disabled={loading || code.length < 5} className="flex-1">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify & continue"}
                   </Button>
                 </div>
