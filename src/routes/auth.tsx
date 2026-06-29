@@ -65,21 +65,11 @@ function AuthPage() {
     setLoading(true);
     try {
       const res = await backend.verifyOtp({ phone: phone.trim(), code, phone_code_hash: phoneCodeHash });
-      if (!res.access_token || !res.refresh_token) {
-        throw new Error("Backend did not return a valid session");
+      if (!res.success || !res.token) {
+        throw new Error("Invalid verification response");
       }
-      const { error } = await supabase.auth.setSession({
-        access_token: res.access_token,
-        refresh_token: res.refresh_token,
-      });
-      if (error) throw error;
-
-      // Persist session_string for the worker (best-effort).
-      if (res.session_string && res.user?.id) {
-        await supabase
-          .from("sessions")
-          .insert({ user_id: res.user.id, session_string: res.session_string });
-      }
+      localStorage.setItem("auth_token", res.token);
+      if (res.user) localStorage.setItem("auth_user", JSON.stringify(res.user));
       toast.success("Signed in");
       navigate({ to: "/dashboard", replace: true });
     } catch (err) {
