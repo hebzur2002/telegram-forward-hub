@@ -81,6 +81,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Telegram Auto Forward" },
       { name: "description", content: "Manage Telegram message forwarding rules, logs, and sessions." },
+      { property: "og:title", content: "Telegram Auto Forward" },
+      { name: "twitter:title", content: "Telegram Auto Forward" },
+      { property: "og:description", content: "Manage Telegram message forwarding rules, logs, and sessions." },
+      { name: "twitter:description", content: "Manage Telegram message forwarding rules, logs, and sessions." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/850e6473-bf60-43a9-a1c0-88c192ed4c97/id-preview-eb276ce8--82277567-d16e-4777-b0a6-bbd86dbe392d.lovable.app-1782717427890.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/850e6473-bf60-43a9-a1c0-88c192ed4c97/id-preview-eb276ce8--82277567-d16e-4777-b0a6-bbd86dbe392d.lovable.app-1782717427890.png" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:type", content: "website" },
     ],
     links: [
       {
