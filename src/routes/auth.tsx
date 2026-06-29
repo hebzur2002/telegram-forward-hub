@@ -64,12 +64,19 @@ function AuthPage() {
     if (code.length < 5) return;
     setLoading(true);
     try {
-      const res = await backend.verifyOtp({ phone: phone.trim(), code, phone_code_hash: phoneCodeHash });
-      if (!res.success || !res.token) {
-        throw new Error("Invalid verification response");
+      const raw = await backend.verifyOtp({ phone: phone.trim(), code, phone_code_hash: phoneCodeHash });
+      console.log("verify-otp response:", raw);
+      // Be tolerant of different backend response shapes.
+      const res: any = (raw as any)?.data ?? raw;
+      const token: string | undefined =
+        res?.token ?? res?.access_token ?? res?.jwt ?? res?.session?.access_token;
+      const user = res?.user ?? res?.data?.user;
+      const ok = res?.success ?? res?.ok ?? Boolean(token);
+      if (!ok || !token) {
+        throw new Error(res?.error || res?.message || "Invalid verification response");
       }
-      localStorage.setItem("auth_token", res.token);
-      if (res.user) localStorage.setItem("auth_user", JSON.stringify(res.user));
+      localStorage.setItem("auth_token", token);
+      if (user) localStorage.setItem("auth_user", JSON.stringify(user));
       toast.success("Signed in");
       navigate({ to: "/dashboard", replace: true });
     } catch (err) {
