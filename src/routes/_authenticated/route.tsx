@@ -7,11 +7,13 @@ import { AppTopbar } from "@/components/app-topbar";
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) {
-      throw redirect({ to: "/auth" });
-    }
-    return { user: data.user };
+    const token = localStorage.getItem("auth_token");
+
+if (!token) {
+  throw redirect({ to: "/auth" });
+}
+
+return {};
   },
   component: AuthedLayout,
 });
