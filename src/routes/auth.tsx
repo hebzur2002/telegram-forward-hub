@@ -69,9 +69,9 @@ function AuthPage() {
       // Be tolerant of different backend response shapes.
       const res: any = (raw as any)?.data ?? raw;
       const token: string | undefined =
-        res?.token ?? res?.access_token ?? res?.jwt ?? res?.session?.access_token;
+        res?.token;
       const user = res?.user ?? res?.data?.user;
-      const ok = res?.success ?? res?.ok ?? Boolean(token);
+      const ok = res?.success === true;
       if (!ok || !token) {
         throw new Error(res?.error || res?.message || "Invalid verification response");
       }
