@@ -63,7 +63,7 @@ function DashboardPage() {
     let cancelled = false;
     const tick = () => {
       backend
-        .workerStatus.()
+        .workerStatus()
         .then((s) => !cancelled && setWorker({ online: s.online }))
         .catch(() => !cancelled && setWorker({ online: false }));
     };
