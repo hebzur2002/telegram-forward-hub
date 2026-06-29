@@ -67,7 +67,7 @@ function AuthPage() {
       const raw = await backend.verifyOtp({ phone: phone.trim(), code });
       console.log("verify-otp response:", raw);
       // Be tolerant of different backend response shapes.
-      const res: any = (raw as any)?.data ?? raw;
+      const res: any = raw;
       const token: string | undefined =
         res?.token;
       const user = res?.user ?? res?.data?.user;
