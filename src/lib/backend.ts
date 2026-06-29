@@ -48,11 +48,9 @@ export interface SendOtpResponse {
 }
 
 export interface VerifyOtpResponse {
-  ok: boolean;
-  access_token: string;
-  refresh_token: string;
-  session_string?: string;
-  user?: { id: string; phone: string };
+  success: boolean;
+  token: string;
+  user?: { id: string; phone: string; role?: string };
 }
 
 export interface WorkerStatusResponse {

@@ -61,25 +61,15 @@ function AuthPage() {
 
   const verifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (code.length < 4) return;
+    if (code.length < 5) return;
     setLoading(true);
     try {
       const res = await backend.verifyOtp({ phone: phone.trim(), code, phone_code_hash: phoneCodeHash });
-      if (!res.access_token || !res.refresh_token) {
-        throw new Error("Backend did not return a valid session");
+      if (!res.success || !res.token) {
+        throw new Error("Invalid verification response");
       }
-      const { error } = await supabase.auth.setSession({
-        access_token: res.access_token,
-        refresh_token: res.refresh_token,
-      });
-      if (error) throw error;
-
-      // Persist session_string for the worker (best-effort).
-      if (res.session_string && res.user?.id) {
-        await supabase
-          .from("sessions")
-          .insert({ user_id: res.user.id, session_string: res.session_string });
-      }
+      localStorage.setItem("auth_token", res.token);
+      if (res.user) localStorage.setItem("auth_user", JSON.stringify(res.user));
       toast.success("Signed in");
       navigate({ to: "/dashboard", replace: true });
     } catch (err) {
@@ -134,9 +124,9 @@ function AuthPage() {
               <form onSubmit={verifyOtp} className="space-y-5">
                 <div className="space-y-2">
                   <Label>Verification code</Label>
-                  <InputOTP maxLength={6} value={code} onChange={setCode}>
+                  <InputOTP maxLength={5} value={code} onChange={setCode}>
                     <InputOTPGroup>
-                      {Array.from({ length: 6 }).map((_, i) => (
+                      {Array.from({ length: 5 }).map((_, i) => (
                         <InputOTPSlot key={i} index={i} />
                       ))}
                     </InputOTPGroup>
@@ -146,7 +136,7 @@ function AuthPage() {
                   <Button type="button" variant="ghost" onClick={() => setStep("phone")} disabled={loading}>
                     Change number
                   </Button>
-                  <Button type="submit" disabled={loading || code.length < 4} className="flex-1">
+                  <Button type="submit" disabled={loading || code.length < 5} className="flex-1">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify & continue"}
                   </Button>
                 </div>
