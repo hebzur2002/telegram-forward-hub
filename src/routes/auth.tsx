@@ -64,7 +64,7 @@ function AuthPage() {
     if (code.length < 5) return;
     setLoading(true);
     try {
-      const raw = await backend.verifyOtp({ phone: phone.trim(), code });
+      const raw = await backend.verifyOtp({ phone: phone.trim(), code, phone_code_hash: phoneCodeHash });
       console.log("verify-otp response:", raw);
       // Be tolerant of different backend response shapes.
       const res: any = raw;
