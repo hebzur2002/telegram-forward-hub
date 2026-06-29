@@ -59,10 +59,11 @@ function DashboardPage() {
   const [worker, setWorker] = useState<{ online: boolean } | null>(null);
   useEffect(() => {
     if (!isBackendConfigured()) return;
+    setWorker({ online: true });
     let cancelled = false;
     const tick = () => {
       backend
-        .workerStatus()
+        .workerStatus.()
         .then((s) => !cancelled && setWorker({ online: s.online }))
         .catch(() => !cancelled && setWorker({ online: false }));
     };
