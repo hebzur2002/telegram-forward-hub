@@ -61,7 +61,7 @@ function AuthPage() {
 
   const verifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (code.length < 4) return;
+    if (code.length < 5) return;
     setLoading(true);
     try {
       const res = await backend.verifyOtp({ phone: phone.trim(), code, phone_code_hash: phoneCodeHash });
