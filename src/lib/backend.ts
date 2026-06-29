@@ -31,12 +31,16 @@ async function jsonRequest<T>(path: string, init?: RequestInit): Promise<T> {
     body = text;
   }
   if (!res.ok) {
-    const msg =
-      (body && typeof body === "object" && "error" in (body as Record<string, unknown>)
-        ? String((body as Record<string, unknown>).error)
-        : typeof body === "string"
-          ? body
-          : `Request failed with status ${res.status}`);
+  const msg =
+  body && typeof body === "object"
+    ? String(
+        (body as any).detail ??
+        (body as any).error ??
+        `Request failed with status ${res.status}`
+      )
+    : typeof body === "string"
+      ? body
+      : `Request failed with status ${res.status}`;
     throw new Error(msg);
   }
   return body as T;
