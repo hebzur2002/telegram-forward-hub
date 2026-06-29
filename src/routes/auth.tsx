@@ -124,9 +124,9 @@ function AuthPage() {
               <form onSubmit={verifyOtp} className="space-y-5">
                 <div className="space-y-2">
                   <Label>Verification code</Label>
-                  <InputOTP maxLength={6} value={code} onChange={setCode}>
+                  <InputOTP maxLength={5} value={code} onChange={setCode}>
                     <InputOTPGroup>
-                      {Array.from({ length: 6 }).map((_, i) => (
+                      {Array.from({ length: 5 }).map((_, i) => (
                         <InputOTPSlot key={i} index={i} />
                       ))}
                     </InputOTPGroup>
