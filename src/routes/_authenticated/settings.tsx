@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useTheme } from "@/lib/theme";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { supabase } from "@/integrations/supabase/client";
+import { clearAuth } from "@/lib/backend";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -24,7 +24,7 @@ function SettingsPage() {
   const signOut = async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
-    await supabase.auth.signOut();
+    clearAuth();
     toast.success("Signed out");
     navigate({ to: "/auth", replace: true });
   };
@@ -52,7 +52,7 @@ function SettingsPage() {
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>User ID</Label>
-            <Input value={user?.id ?? ""} readOnly className="font-mono text-xs" />
+            <Input value={user?.id ? String(user.id) : ""} readOnly className="font-mono text-xs" />
           </div>
         </CardContent>
       </Card>

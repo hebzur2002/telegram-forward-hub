@@ -1,19 +1,15 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppTopbar } from "@/components/app-topbar";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async () => {
+  beforeLoad: () => {
+    if (typeof window === "undefined") return {};
     const token = localStorage.getItem("auth_token");
-
-if (!token) {
-  throw redirect({ to: "/auth" });
-}
-
-return {};
+    if (!token) throw redirect({ to: "/auth" });
+    return {};
   },
   component: AuthedLayout,
 });
