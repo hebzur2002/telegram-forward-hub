@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, ListChecks, ScrollText, Cpu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
-import { supabase } from "@/integrations/supabase/client";
 import { backend, isBackendConfigured } from "@/lib/backend";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -37,29 +36,24 @@ function StatCard({
 }
 
 function DashboardPage() {
-  const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats"],
-    queryFn: async () => {
-      const [rules, active, logsToday] = await Promise.all([
-        supabase.from("rules").select("id", { count: "exact", head: true }),
-        supabase.from("rules").select("id", { count: "exact", head: true }).eq("is_enabled", true),
-        supabase
-          .from("logs")
-          .select("id", { count: "exact", head: true })
-          .gte("created_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString()),
-      ]);
-      return {
-        total: rules.count ?? 0,
-        active: active.count ?? 0,
-        logsToday: logsToday.count ?? 0,
-      };
-    },
+  const { data: rulesData } = useQuery({
+    queryKey: ["rules"],
+    queryFn: () => backend.listRules(),
   });
+  const { data: logsData } = useQuery({
+    queryKey: ["logs-recent"],
+    queryFn: () => backend.listLogs({ page: 1, limit: 100 }),
+  });
+
+  const total = rulesData?.rules.length ?? 0;
+  const active = rulesData?.rules.filter((r) => r.is_enabled).length ?? 0;
+  const dayAgo = Date.now() - 24 * 3600 * 1000;
+  const logsToday =
+    logsData?.logs.filter((l) => l.created_at && new Date(l.created_at).getTime() >= dayAgo).length ?? 0;
 
   const [worker, setWorker] = useState<{ online: boolean } | null>(null);
   useEffect(() => {
     if (!isBackendConfigured()) return;
-    setWorker({ online: true });
     let cancelled = false;
     const tick = () => {
       backend
@@ -82,9 +76,9 @@ function DashboardPage() {
         <p className="text-sm text-muted-foreground">Overview of your forwarding rules and worker.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total rules" value={stats?.total ?? "—"} icon={ListChecks} />
-        <StatCard title="Active rules" value={stats?.active ?? "—"} icon={Activity} />
-        <StatCard title="Events (24h)" value={stats?.logsToday ?? "—"} icon={ScrollText} />
+        <StatCard title="Total rules" value={rulesData ? total : "—"} icon={ListChecks} />
+        <StatCard title="Active rules" value={rulesData ? active : "—"} icon={Activity} />
+        <StatCard title="Events (24h)" value={logsData ? logsToday : "—"} icon={ScrollText} />
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Worker</CardTitle>

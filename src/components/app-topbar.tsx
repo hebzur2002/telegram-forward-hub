@@ -14,7 +14,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useTheme } from "@/lib/theme";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { supabase } from "@/integrations/supabase/client";
+import { clearAuth } from "@/lib/backend";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function AppTopbar() {
@@ -28,7 +28,7 @@ export function AppTopbar() {
   const signOut = async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
-    await supabase.auth.signOut();
+    clearAuth();
     toast.success("Signed out");
     navigate({ to: "/auth", replace: true });
   };

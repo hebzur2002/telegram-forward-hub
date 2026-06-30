@@ -4,8 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Cpu, Megaphone, Users, ScrollText } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
-import { backend, isBackendConfigured } from "@/lib/backend";
+import { backend, getStoredUser, isBackendConfigured } from "@/lib/backend";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,15 +20,11 @@ import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
 
 export const Route = createFileRoute("/_authenticated/admin")({
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) throw redirect({ to: "/auth" });
-    const { data: roles } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", data.user.id);
-    const isAdmin = roles?.some((r) => r.role === "admin");
-    if (!isAdmin) throw redirect({ to: "/dashboard" });
+  beforeLoad: () => {
+    if (typeof window === "undefined") return;
+    const u = getStoredUser();
+    if (!u) throw redirect({ to: "/auth" });
+    if (u.role !== "admin") throw redirect({ to: "/dashboard" });
   },
   component: AdminPage,
 });
@@ -37,52 +32,23 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminPage() {
   const queryClient = useQueryClient();
 
-  const { data: users } = useQuery({
+  const { data: usersData } = useQuery({
     queryKey: ["admin-users"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => backend.adminUsers(),
   });
 
-  const { data: sessions } = useQuery({
+  const { data: sessionsData } = useQuery({
     queryKey: ["admin-sessions"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sessions")
-        .select("*")
-        .order("last_active", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => backend.adminSessions(),
   });
 
-  const { data: systemLogs } = useQuery({
+  const { data: logsData } = useQuery({
     queryKey: ["admin-system-logs"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => backend.adminLogs(),
   });
 
   const suspendMutation = useMutation({
-    mutationFn: async ({ id, suspend }: { id: string; suspend: boolean }) => {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ is_suspended: suspend })
-        .eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: number) => backend.adminSuspend(id),
     onSuccess: () => {
       toast.success("User updated");
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
@@ -90,14 +56,14 @@ function AdminPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
-  const [worker, setWorker] = useState<{ online: boolean; uptime?: number } | null>(null);
+  const [worker, setWorker] = useState<{ online: boolean } | null>(null);
   useEffect(() => {
     if (!isBackendConfigured()) return;
     let cancelled = false;
     const tick = () => {
       backend
         .workerStatus()
-        .then((s) => !cancelled && setWorker({ online: s.online, uptime: s.uptime_seconds }))
+        .then((s) => !cancelled && setWorker({ online: s.online }))
         .catch(() => !cancelled && setWorker({ online: false }));
     };
     tick();
@@ -110,20 +76,17 @@ function AdminPage() {
 
   const [broadcastMsg, setBroadcastMsg] = useState("");
   const broadcastMutation = useMutation({
-    mutationFn: async (msg: string) => {
-      // Record in DB for history
-      const { data: u } = await supabase.auth.getUser();
-      await supabase.from("announcements").insert({ message: msg, created_by: u.user?.id ?? null });
-      if (isBackendConfigured()) {
-        await backend.broadcast(msg);
-      }
-    },
+    mutationFn: (msg: string) => backend.broadcast(msg),
     onSuccess: () => {
       toast.success("Announcement sent");
       setBroadcastMsg("");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Broadcast failed"),
   });
+
+  const users = usersData?.users ?? [];
+  const sessions = sessionsData?.sessions ?? [];
+  const systemLogs = logsData?.logs ?? [];
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
@@ -138,7 +101,7 @@ function AdminPage() {
             <CardTitle className="flex items-center gap-2"><Users className="h-4 w-4" /> Users</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {!users || users.length === 0 ? (
+            {users.length === 0 ? (
               <EmptyState title="No users yet" className="m-4" />
             ) : (
               <Table>
@@ -154,10 +117,10 @@ function AdminPage() {
                 <TableBody>
                   {users.map((u) => (
                     <TableRow key={u.id}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{u.id.slice(0, 8)}…</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{u.id}</TableCell>
                       <TableCell>{u.phone ?? "—"}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {new Date(u.created_at).toLocaleDateString()}
+                        {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={u.is_suspended ? "paused" : "active"} />
@@ -166,7 +129,7 @@ function AdminPage() {
                         <Button
                           size="sm"
                           variant={u.is_suspended ? "outline" : "destructive"}
-                          onClick={() => suspendMutation.mutate({ id: u.id, suspend: !u.is_suspended })}
+                          onClick={() => suspendMutation.mutate(u.id)}
                         >
                           {u.is_suspended ? "Reinstate" : "Suspend"}
                         </Button>
@@ -191,13 +154,8 @@ function AdminPage() {
                 {worker === null ? "Checking…" : worker.online ? "Online" : "Offline"}
               </span>
             </div>
-            {worker?.uptime ? (
-              <p className="text-xs text-muted-foreground">
-                Uptime: {Math.round(worker.uptime / 60)} min
-              </p>
-            ) : null}
             {!isBackendConfigured() && (
-              <p className="text-xs text-amber-400">VITE_BACKEND_URL is not configured.</p>
+              <p className="text-xs text-amber-400">VITE_API_URL is not configured.</p>
             )}
           </CardContent>
         </Card>
@@ -230,23 +188,23 @@ function AdminPage() {
             <CardTitle className="flex items-center gap-2"><ScrollText className="h-4 w-4" /> Active sessions</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {!sessions || sessions.length === 0 ? (
+            {sessions.length === 0 ? (
               <EmptyState title="No active sessions" className="m-4" />
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>User</TableHead>
-                    <TableHead>Created</TableHead>
                     <TableHead>Last active</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sessions.map((s) => (
                     <TableRow key={s.id}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{s.user_id.slice(0, 8)}…</TableCell>
-                      <TableCell className="text-xs">{new Date(s.created_at).toLocaleString()}</TableCell>
-                      <TableCell className="text-xs">{new Date(s.last_active).toLocaleString()}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{s.user_id}</TableCell>
+                      <TableCell className="text-xs">
+                        {s.last_active ? new Date(s.last_active).toLocaleString() : "—"}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -258,17 +216,16 @@ function AdminPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>System logs (latest 20)</CardTitle>
+          <CardTitle>System logs (latest 200)</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {!systemLogs || systemLogs.length === 0 ? (
+          {systemLogs.length === 0 ? (
             <EmptyState title="No log entries yet" className="m-4" />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Time</TableHead>
-                  <TableHead>User</TableHead>
                   <TableHead>Source → Target</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Error</TableHead>
@@ -278,13 +235,12 @@ function AdminPage() {
                 {systemLogs.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {new Date(row.created_at).toLocaleString()}
+                      {row.created_at ? new Date(row.created_at).toLocaleString() : "—"}
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{row.user_id.slice(0, 8)}…</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {row.source ?? "?"} → {row.target ?? "?"}
                     </TableCell>
-                    <TableCell><StatusBadge status={row.status} /></TableCell>
+                    <TableCell><StatusBadge status={row.status ?? ""} /></TableCell>
                     <TableCell className="max-w-[300px] truncate text-xs text-muted-foreground">
                       {row.error_reason ?? "—"}
                     </TableCell>

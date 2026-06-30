@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, ListChecks, X } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
+import { backend, type Rule } from "@/lib/backend";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,18 +48,6 @@ interface RuleOptions {
   delay: number;
 }
 
-interface RuleRow {
-  id: string;
-  user_id: string;
-  rule_name: string;
-  source_chat: string;
-  target_chat: string;
-  options: RuleOptions;
-  is_enabled: boolean;
-  status: string;
-  created_at: string;
-}
-
 const defaultOptions: RuleOptions = {
   copy_mode: true,
   preserve_formatting: true,
@@ -74,7 +62,7 @@ const defaultOptions: RuleOptions = {
 };
 
 interface RuleDraft {
-  id?: string;
+  id?: number;
   rule_name: string;
   source_chat: string;
   target_chat: string;
@@ -95,41 +83,27 @@ function RulesPage() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<RuleDraft>(emptyDraft);
 
-  const { data: rules, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["rules"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("rules")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as unknown as RuleRow[];
-    },
+    queryFn: () => backend.listRules(),
   });
+  const rules = data?.rules ?? [];
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["rules"] });
 
   const upsertMutation = useMutation({
     mutationFn: async (d: RuleDraft) => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Not signed in");
       const payload = {
         rule_name: d.rule_name,
         source_chat: d.source_chat,
         target_chat: d.target_chat,
         is_enabled: d.is_enabled,
-        options: d.options as unknown as import("@/integrations/supabase/types").Json,
-        status: d.is_enabled ? "active" : "paused",
-        user_id: u.user.id,
+        options: d.options as unknown as Record<string, any>,
       };
-
       if (d.id) {
-        const { error } = await supabase.from("rules").update(payload).eq("id", d.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("rules").insert(payload);
-        if (error) throw error;
+        return backend.updateRule(d.id, payload);
       }
+      return backend.createRule(payload);
     },
     onSuccess: () => {
       toast.success(draft.id ? "Rule updated" : "Rule created");
@@ -141,10 +115,7 @@ function RulesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("rules").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: number) => backend.deleteRule(id),
     onSuccess: () => {
       toast.success("Rule deleted");
       invalidate();
@@ -153,13 +124,7 @@ function RulesPage() {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
-      const { error } = await supabase
-        .from("rules")
-        .update({ is_enabled: enabled, status: enabled ? "active" : "paused" })
-        .eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: number) => backend.toggleRule(id),
     onSuccess: () => invalidate(),
     onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
   });
@@ -168,14 +133,14 @@ function RulesPage() {
     setDraft(emptyDraft);
     setOpen(true);
   };
-  const openEdit = (rule: RuleRow) => {
+  const openEdit = (rule: Rule) => {
     setDraft({
       id: rule.id,
       rule_name: rule.rule_name,
       source_chat: rule.source_chat,
       target_chat: rule.target_chat,
       is_enabled: rule.is_enabled,
-      options: { ...defaultOptions, ...(rule.options ?? {}) },
+      options: { ...defaultOptions, ...((rule.options as Partial<RuleOptions>) ?? {}) },
     });
     setOpen(true);
   };
@@ -196,7 +161,11 @@ function RulesPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-10 text-center text-sm text-muted-foreground">Loading rules…</div>
-          ) : !rules || rules.length === 0 ? (
+          ) : error ? (
+            <div className="p-10 text-center text-sm text-destructive">
+              {error instanceof Error ? error.message : "Failed to load rules"}
+            </div>
+          ) : rules.length === 0 ? (
             <EmptyState
               icon={<ListChecks className="h-8 w-8" />}
               title="No rules yet"
@@ -222,11 +191,11 @@ function RulesPage() {
                     <TableCell className="font-medium">{r.rule_name}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{r.source_chat}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{r.target_chat}</TableCell>
-                    <TableCell><StatusBadge status={r.status} /></TableCell>
+                    <TableCell><StatusBadge status={r.is_enabled ? "active" : "paused"} /></TableCell>
                     <TableCell>
                       <Switch
                         checked={r.is_enabled}
-                        onCheckedChange={(v) => toggleMutation.mutate({ id: r.id, enabled: v })}
+                        onCheckedChange={() => toggleMutation.mutate(r.id)}
                       />
                     </TableCell>
                     <TableCell className="text-right">

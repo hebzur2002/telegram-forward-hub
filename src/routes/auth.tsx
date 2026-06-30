@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Phone, ShieldCheck, Loader2, Send } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { backend, isBackendConfigured } from "@/lib/backend";
+import { backend, isBackendConfigured, setAuth, getToken } from "@/lib/backend";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,27 +28,25 @@ function AuthPage() {
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [phoneCodeHash, setPhoneCodeHash] = useState<string | undefined>(undefined);
+  const [password, setPassword] = useState("");
+  const [needs2fa, setNeeds2fa] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // If already signed in, leave the auth page.
+  // Already signed in? Skip to dashboard.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/dashboard", replace: true });
-    });
+    if (getToken()) navigate({ to: "/dashboard", replace: true });
   }, [navigate]);
 
   const sendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone.trim()) return;
     if (!isBackendConfigured()) {
-      toast.error("Backend URL not configured. Set VITE_BACKEND_URL.");
+      toast.error("Backend URL not configured. Set VITE_API_URL.");
       return;
     }
     setLoading(true);
     try {
-      const res = await backend.sendOtp(phone.trim());
-      setPhoneCodeHash(res.phone_code_hash);
+      await backend.sendOtp(phone.trim());
       setStep("otp");
       toast.success("OTP sent via Telegram");
     } catch (err) {
@@ -64,19 +61,20 @@ function AuthPage() {
     if (code.length < 5) return;
     setLoading(true);
     try {
-      const raw = await backend.verifyOtp({ phone: phone.trim(), code, phone_code_hash: phoneCodeHash });
-      console.log("verify-otp response:", raw);
-      // Be tolerant of different backend response shapes.
-      const res: any = raw;
-      const token: string | undefined =
-        res?.token;
-      const user = res?.user ?? res?.data?.user;
-      const ok = res?.success === true;
-      if (!ok || !token) {
-        throw new Error(res?.error || res?.message || "Invalid verification response");
+      const res = await backend.verifyOtp({
+        phone: phone.trim(),
+        code,
+        ...(needs2fa && password ? { password } : {}),
+      });
+      if (res.requires_2fa) {
+        setNeeds2fa(true);
+        toast.message("Two-factor password required");
+        return;
       }
-      localStorage.setItem("auth_token", token);
-      if (user) localStorage.setItem("auth_user", JSON.stringify(user));
+      if (!res.token || !res.user) {
+        throw new Error("Invalid verification response");
+      }
+      setAuth(res.token, res.user);
       toast.success("Signed in");
       navigate({ to: "/dashboard", replace: true });
     } catch (err) {
@@ -139,11 +137,24 @@ function AuthPage() {
                     </InputOTPGroup>
                   </InputOTP>
                 </div>
+                {needs2fa && (
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Two-factor password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      required
+                    />
+                  </div>
+                )}
                 <div className="flex gap-2">
-                  <Button type="button" variant="ghost" onClick={() => setStep("phone")} disabled={loading}>
+                  <Button type="button" variant="ghost" onClick={() => { setStep("phone"); setNeeds2fa(false); setCode(""); setPassword(""); }} disabled={loading}>
                     Change number
                   </Button>
-                  <Button type="submit" disabled={loading || code.length < 5} className="flex-1">
+                  <Button type="submit" disabled={loading || code.length < 5 || (needs2fa && !password)} className="flex-1">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify & continue"}
                   </Button>
                 </div>
